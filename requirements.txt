@@ -5,3 +5,5 @@ beautifulsoup4
 openai
 python-dotenv
 markdown
+jinja2
+python-multipart
