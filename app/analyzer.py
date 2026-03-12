@@ -21,25 +21,27 @@ import markdown as md_lib
 
 # ── 로거 설정 ─────────────────────────────────────────────────────────────────
 
-_LOG_DIR = os.path.join(os.path.dirname(__file__), "..", "log")
-os.makedirs(_LOG_DIR, exist_ok=True)
-LOG_FILE = os.path.join(_LOG_DIR, "analysis.log")
-
 logger = logging.getLogger("site_analyzer")
 logger.setLevel(logging.DEBUG)
 
 if not logger.handlers:
-    # 파일 핸들러 (최대 5MB, 3개 백업) — log/analysis.log 에 저장
-    fh = logging.handlers.RotatingFileHandler(
-        LOG_FILE, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
-    )
-    fh.setLevel(logging.DEBUG)
-    fh.setFormatter(
-        logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
-    )
-    logger.addHandler(fh)
+    # Vercel 등 서버리스: 파일 시스템 쓰기 불가 → 콘솔만 사용
+    _log_dir = os.path.join(os.path.dirname(__file__), "..", "log")
+    _log_file = os.path.join(_log_dir, "analysis.log")
+    try:
+        os.makedirs(_log_dir, exist_ok=True)
+        fh = logging.handlers.RotatingFileHandler(
+            _log_file, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
+        )
+        fh.setLevel(logging.DEBUG)
+        fh.setFormatter(
+            logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+        )
+        logger.addHandler(fh)
+    except OSError:
+        # 읽기 전용(서버리스) 등: 파일 핸들러 생략, 스트림만
+        pass
 
-    # 콘솔 핸들러 (INFO 이상만)
     ch = logging.StreamHandler()
     ch.setLevel(logging.INFO)
     ch.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
