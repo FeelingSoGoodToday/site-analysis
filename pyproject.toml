@@ -3,7 +3,17 @@ name = "tma-site-analysis"
 version = "1.0.0"
 description = "이커머스 사이트 분석기"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+  "fastapi",
+  "uvicorn[standard]",
+  "httpx",
+  "beautifulsoup4",
+  "openai",
+  "python-dotenv",
+  "markdown",
+  "jinja2",
+  "python-multipart",
+]
 
 [project.scripts]
 app = "app.main:app"
