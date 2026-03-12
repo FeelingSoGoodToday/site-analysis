@@ -420,6 +420,98 @@ async def classify_category_tier(collected: dict) -> dict:
         return {"major_code": "20", "major_name": "미지정", "minor_code": "I6", "minor_name": "미지정"}
 
 
+# ── 브랜드명 추출 ─────────────────────────────────────────────────────────────
+
+def _extract_brand_name(collected: dict) -> str:
+    """footer 회사명 → title 순으로 브랜드명 추출"""
+    company = collected.get("footer", {}).get("회사명", "")
+    if company:
+        company = re.sub(r"(주식회사|\(주\)|㈜)\s*", "", company).strip()
+        if company:
+            return company
+    title = collected.get("title", "")
+    return title.split()[0] if title else ""
+
+
+# ── 카카오톡 채널 검색 ─────────────────────────────────────────────────────────
+
+_KAKAO_CHANNEL_RE = re.compile(r"pf\.kakao\.com/(_[a-zA-Z0-9]+)")
+
+
+async def search_kakao_channels(brand_name: str, site_html: str) -> dict:
+    """검색 엔진 + HTML 직접 추출로 카카오톡 채널 탐색"""
+    channel_ids: list[str] = []
+
+    # 1. 사이트 HTML 직접 추출
+    for m in _KAKAO_CHANNEL_RE.finditer(site_html):
+        cid = m.group(1)
+        if cid not in channel_ids:
+            channel_ids.append(cid)
+    logger.info(f"[kakao] HTML 직접 추출: {channel_ids}")
+
+    # 2. 검색 엔진 탐색 (브랜드명이 있을 때만)
+    if brand_name:
+        query = f'site:pf.kakao.com "{brand_name}"'
+        search_urls = [
+            f"https://search.naver.com/search.naver?where=web&query={query}",
+            f"https://html.duckduckgo.com/html/?q=site%3Apf.kakao.com+%22{brand_name}%22",
+        ]
+        for search_url in search_urls:
+            try:
+                async with httpx.AsyncClient(
+                    headers=HEADERS, follow_redirects=True, timeout=10, verify=False
+                ) as client:
+                    resp = await client.get(search_url)
+                    for m in _KAKAO_CHANNEL_RE.finditer(resp.text):
+                        cid = m.group(1)
+                        if cid not in channel_ids:
+                            channel_ids.append(cid)
+                if channel_ids:
+                    logger.info(f"[kakao] 검색 엔진 결과: {channel_ids} (query={search_url[:60]})")
+                    break
+            except Exception as e:
+                logger.warning(f"[kakao] 검색 엔진 요청 실패: {e}")
+
+    channel_ids = channel_ids[:3]  # 최대 3개
+
+    if not channel_ids:
+        logger.info("[kakao] 채널 미발견")
+        return {"channels": [], "search_query": f'site:pf.kakao.com "{brand_name}"', "error": "채널 미발견"}
+
+    # 3. 각 채널 상세 정보 수집
+    channels: list[dict] = []
+    for cid in channel_ids:
+        channel_url = f"https://pf.kakao.com/{cid}"
+        try:
+            async with httpx.AsyncClient(
+                headers=HEADERS, follow_redirects=True, timeout=10, verify=False
+            ) as client:
+                resp = await client.get(channel_url)
+            ch_soup = BeautifulSoup(resp.text, "html.parser")
+            friends_el = ch_soup.find("span", class_="txt_friends")
+            name_el = ch_soup.find(class_="tit_channel") or ch_soup.find("title")
+            channels.append({
+                "channel_id": cid,
+                "url": channel_url,
+                "name": name_el.get_text(strip=True) if name_el else "",
+                "friends": friends_el.get_text(strip=True) if friends_el else "",
+            })
+            logger.info(f"[kakao] 채널 수집 완료: {cid} | 친구={channels[-1]['friends']}")
+        except Exception as e:
+            logger.warning(f"[kakao] 채널 접속 실패 {cid}: {e}")
+            channels.append({"channel_id": cid, "url": channel_url, "name": "", "friends": ""})
+
+    first = channels[0]
+    return {
+        "channel_id": first["channel_id"],
+        "name": first["name"],
+        "friends": first["friends"],
+        "url": first["url"],
+        "channels": channels,
+        "search_query": f'site:pf.kakao.com "{brand_name}"',
+    }
+
+
 # ── OpenAI API 보고서 생성 ───────────────────────────────────────────────────
 
 async def generate_report(collected: dict) -> str:
@@ -453,6 +545,17 @@ async def generate_report(collected: dict) -> str:
         if category_tier else "미분류"
     )
 
+    kakao = collected.get("kakao", {})
+    if kakao.get("channel_id"):
+        kakao_text = (
+            f"채널ID: {kakao['channel_id']} / 채널명: {kakao.get('name', '')} / "
+            f"팔로워: {kakao.get('friends', '불명')} / URL: {kakao.get('url', '')}"
+        )
+    elif kakao.get("channels"):
+        kakao_text = f"채널 {len(kakao['channels'])}개 발견 (상세 수집 실패)"
+    else:
+        kakao_text = "채널 미발견"
+
     user_prompt = f"""이커머스 사이트를 분석하고 한국어 보고서를 작성하세요.
 
 URL: {collected['url']}
@@ -462,6 +565,7 @@ URL: {collected['url']}
 기업정보(footer): {footer_text}
 footer원문: {footer_raw}
 대분류/소분류 카테고리: {category_tier_text}
+카카오톡채널: {kakao_text}
 카테고리: {categories_text}
 상품이미지alt: {images_text}
 본문샘플: {body_sample}
@@ -473,14 +577,14 @@ footer원문: {footer_raw}
 **호스팅사:** [명칭] (근거: [변수/경로])
 ## 2. 기업 정보
 회사명, 대표자, 사업자번호, 주소, 연락처
-## 3. 대분류/소분류 카테고리
+## 3. 카카오톡 채널 분석
+채널명, 팔로워 수, URL (미발견 시 명시)
+## 4. 대분류/소분류 카테고리
 **대분류:** [코드] [명칭] / **중분류:** [코드] [명칭]
-## 4. 주요 제품 및 카테고리
+## 5. 주요 제품 및 카테고리
 제품군 분류, `[이미지 삽입: 제품명]` 태그 포함
-## 5. 비즈니스 전략 및 특징 분석
-타겟 고객층, 마케팅 전략
-## 6. 기술 스택 및 마케팅 도구
-GA, 픽셀 등 감지 도구"""
+## 6. 비즈니스 전략 및 마케팅 도구
+타겟 고객층, GA/픽셀 등 감지 도구"""
 
     system_prompt = (
         "당신은 이커머스 기술 스택 분석가이자 비즈니스 전략가입니다. "
@@ -574,7 +678,7 @@ async def run_analysis(url: str) -> AsyncGenerator[dict, None]:
     logger.info("[Step 2] 호스팅 솔루션 감지")
     collected["hosting"] = detect_hosting(html)
 
-    # ── Step 3: 기업 정보 및 카테고리 추출 ──────────────────────────────────
+    # ── Step 3: 기업 정보 · 카테고리 추출 + 대분류/소분류 분류 ──────────────────
     yield {"type": "progress", "step": 3, "message": "기업 정보 및 카테고리 추출 중..."}
     logger.info("[Step 3] 기업 정보 및 카테고리 추출")
     collected["footer"] = extract_footer_info(soup)
@@ -586,11 +690,17 @@ async def run_analysis(url: str) -> AsyncGenerator[dict, None]:
     logger.info(f"[Step 3] 카테고리({len(collected['categories'])}개): {collected['categories'][:10]}")
     logger.info(f"[Step 3] 상품이미지({len(collected['product_images'])}개)")
 
-    # ── Step 4: 대분류/소분류 카테고리 분류 ─────────────────────────────────────
-    yield {"type": "progress", "step": 4, "message": "대분류/소분류 카테고리 분류 중..."}
-    logger.info("[Step 4] 대분류/소분류 카테고리 분류 시작")
+    logger.info("[Step 3] 대분류/소분류 카테고리 분류 시작")
     collected["category_tier"] = await classify_category_tier(collected)
-    logger.info(f"[Step 4] 대분류/소분류 카테고리: {collected['category_tier']}")
+    logger.info(f"[Step 3] 대분류/소분류 카테고리: {collected['category_tier']}")
+
+    # ── Step 4: 카카오톡 채널 검색 ────────────────────────────────────────────
+    yield {"type": "progress", "step": 4, "message": "카카오톡 채널 검색 중..."}
+    logger.info("[Step 4] 카카오톡 채널 검색 시작")
+    brand_name = _extract_brand_name(collected)
+    logger.info(f"[Step 4] 브랜드명: '{brand_name}'")
+    collected["kakao"] = await search_kakao_channels(brand_name, html)
+    logger.info(f"[Step 4] 카카오 결과: {collected['kakao']}")
 
     # ── Step 5: AI 보고서 생성 ───────────────────────────────────────────────
     yield {"type": "progress", "step": 5, "message": "AI 보고서 생성 중... (30초~1분 소요)"}
@@ -621,6 +731,7 @@ async def run_analysis(url: str) -> AsyncGenerator[dict, None]:
             "title": collected["title"],
             "hosting": collected["hosting"],
             "footer": {k: v for k, v in collected["footer"].items() if k != "raw_text"},
+            "kakao": collected.get("kakao", {}),
             "category_tier": collected.get("category_tier", {}),
             "categories": collected.get("categories", []),
         },
