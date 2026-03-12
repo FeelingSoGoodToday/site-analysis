@@ -478,28 +478,31 @@ async def search_kakao_channels(brand_name: str, site_html: str) -> dict:
         logger.info("[kakao] 채널 미발견")
         return {"channels": [], "search_query": f'site:pf.kakao.com "{brand_name}"', "error": "채널 미발견"}
 
-    # 3. 각 채널 상세 정보 수집
+    # 3. 각 채널 상세 정보 수집 (내부 JSON API 사용)
     channels: list[dict] = []
     for cid in channel_ids:
         channel_url = f"https://pf.kakao.com/{cid}"
+        api_url = f"https://pf.kakao.com/rocket-web/web/profiles/{cid}"
         try:
             async with httpx.AsyncClient(
-                headers=HEADERS, follow_redirects=True, timeout=10, verify=False
+                headers={**HEADERS, "Accept": "application/json"},
+                follow_redirects=True, timeout=10, verify=False
             ) as client:
-                resp = await client.get(channel_url)
-            ch_soup = BeautifulSoup(resp.text, "html.parser")
-            friends_el = ch_soup.find("span", class_="txt_friends")
-            name_el = ch_soup.find(class_="tit_channel") or ch_soup.find("title")
+                resp = await client.get(api_url)
+            data = resp.json()
+            profile = data.get("profile", {})
+            friend_count = profile.get("friend_count", 0)
             channels.append({
                 "channel_id": cid,
                 "url": channel_url,
-                "name": name_el.get_text(strip=True) if name_el else "",
-                "friends": friends_el.get_text(strip=True) if friends_el else "",
+                "name": profile.get("name", ""),
+                "friends": f"{friend_count:,}" if friend_count else "",
+                "friend_count": friend_count,
             })
-            logger.info(f"[kakao] 채널 수집 완료: {cid} | 친구={channels[-1]['friends']}")
+            logger.info(f"[kakao] 채널 수집 완료: {cid} | 친구={friend_count:,}")
         except Exception as e:
-            logger.warning(f"[kakao] 채널 접속 실패 {cid}: {e}")
-            channels.append({"channel_id": cid, "url": channel_url, "name": "", "friends": ""})
+            logger.warning(f"[kakao] 채널 API 실패 {cid}: {e}")
+            channels.append({"channel_id": cid, "url": channel_url, "name": "", "friends": "", "friend_count": 0})
 
     first = channels[0]
     return {
