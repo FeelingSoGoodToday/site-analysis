@@ -1,0 +1,9 @@
+[project]
+name = "tma-site-analysis"
+version = "1.0.0"
+description = "이커머스 사이트 분석기"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+app = "app.main:app"

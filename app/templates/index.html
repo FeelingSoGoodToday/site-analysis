@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>이커머스 사이트 분석기</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* ── 보고서 마크다운 스타일 ── */
+        .report-content h1 {
+            font-size: 1.75rem; font-weight: 800;
+            margin: 2rem 0 1rem; color: #1a202c;
+            border-bottom: 3px solid #3b82f6; padding-bottom: 0.5rem;
+        }
+        .report-content h2 {
+            font-size: 1.3rem; font-weight: 700;
+            margin: 1.75rem 0 0.75rem; color: #1e40af;
+            border-left: 4px solid #3b82f6; padding-left: 0.75rem;
+        }
+        .report-content h3 {
+            font-size: 1.05rem; font-weight: 600;
+            margin: 1rem 0 0.5rem; color: #374151;
+        }
+        .report-content p {
+            margin: 0.75rem 0; line-height: 1.8; color: #374151;
+        }
+        .report-content ul, .report-content ol {
+            margin: 0.5rem 0 0.75rem 1.5rem; color: #4b5563;
+        }
+        .report-content ul { list-style: disc; }
+        .report-content ol { list-style: decimal; }
+        .report-content li { margin: 0.3rem 0; line-height: 1.7; }
+        .report-content strong { color: #111827; font-weight: 700; }
+        .report-content em { color: #6b7280; font-style: italic; }
+        .report-content hr {
+            margin: 1.5rem 0; border: none;
+            border-top: 1px solid #e5e7eb;
+        }
+        .report-content table {
+            width: 100%; border-collapse: collapse;
+            margin: 1rem 0; font-size: 0.9rem;
+        }
+        .report-content th {
+            background: #eff6ff; color: #1e40af;
+            padding: 0.5rem 0.75rem; text-align: left;
+            border: 1px solid #bfdbfe; font-weight: 600;
+        }
+        .report-content td {
+            padding: 0.5rem 0.75rem;
+            border: 1px solid #e5e7eb; color: #374151;
+        }
+        .report-content tr:nth-child(even) td { background: #f9fafb; }
+        .report-content code {
+            background: #f3f4f6; padding: 0.1rem 0.4rem;
+            border-radius: 4px; font-size: 0.875rem; color: #1f2937;
+        }
+        .report-content blockquote {
+            border-left: 4px solid #93c5fd;
+            padding: 0.5rem 1rem; margin: 1rem 0;
+            background: #eff6ff; color: #1e40af;
+            border-radius: 0 8px 8px 0;
+        }
+
+        /* ── 로딩 애니메이션 ── */
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .spinner {
+            display: inline-block;
+            width: 1rem; height: 1rem;
+            border: 2px solid #93c5fd;
+            border-top-color: #2563eb;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in { animation: fadeIn 0.4s ease forwards; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans">
+
+    <!-- ── 헤더 ── -->
+    <header class="bg-white shadow-sm border-b border-gray-100">
+        <div class="max-w-5xl mx-auto px-4 py-5 flex items-center gap-3">
+            <div class="text-2xl">🛒</div>
+            <div>
+                <h1 class="text-xl font-bold text-gray-800">이커머스 사이트 분석기</h1>
+                <p class="text-sm text-gray-500">
+                    URL 입력 → 호스팅 솔루션 · 기업 정보 · 카카오채널 · 비즈니스 전략 자동 분석
+                </p>
+            </div>
+        </div>
+    </header>
+
+    <!-- ── 메인 콘텐츠 ── -->
+    <main class="max-w-5xl mx-auto px-4 py-8 space-y-6">
+
+        <!-- ① 입력 폼 -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+            <form id="analyze-form">
+                <label class="block text-sm font-semibold text-gray-700 mb-2">
+                    사이트 URL
+                </label>
+                <div class="flex gap-3">
+                    <input
+                        type="url"
+                        name="url"
+                        id="url-input"
+                        placeholder="https://www.example-shop.co.kr"
+                        class="flex-1 px-4 py-3 border border-gray-300 rounded-xl
+                               focus:outline-none focus:ring-2 focus:ring-blue-500
+                               focus:border-transparent text-sm"
+                        required
+                    >
+                    <button
+                        type="submit"
+                        id="submit-btn"
+                        class="px-6 py-3 bg-blue-600 text-white font-semibold
+                               rounded-xl hover:bg-blue-700 active:bg-blue-800
+                               transition-colors disabled:opacity-50 disabled:cursor-not-allowed
+                               whitespace-nowrap text-sm"
+                    >
+                        분석 시작
+                    </button>
+                </div>
+                <p class="text-xs text-gray-400 mt-2">
+                    카페24, 메이크샵, 아임웹, 고도몰, 위사 등 이커머스 플랫폼 감지 지원
+                </p>
+            </form>
+        </div>
+
+        <!-- ② 진행 상황 -->
+        <div id="progress-section" class="hidden fade-in">
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                <div class="flex items-center gap-2 mb-5">
+                    <div class="spinner"></div>
+                    <h2 class="font-semibold text-gray-700">분석 진행 중...</h2>
+                </div>
+                <div id="progress-steps" class="space-y-3"></div>
+            </div>
+        </div>
+
+        <!-- ③ 오류 -->
+        <div id="error-section" class="hidden fade-in">
+            <div class="bg-red-50 rounded-2xl border border-red-200 p-6">
+                <div class="flex items-start gap-3">
+                    <span class="text-2xl">⚠️</span>
+                    <div>
+                        <h2 class="font-semibold text-red-700 mb-1">분석 실패</h2>
+                        <p id="error-message" class="text-red-600 text-sm"></p>
+                        <button
+                            onclick="resetForm()"
+                            class="mt-4 px-4 py-2 bg-red-600 text-white text-sm
+                                   rounded-lg hover:bg-red-700"
+                        >
+                            다시 시도
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ④ 분석 결과 -->
+        <div id="report-section" class="hidden fade-in space-y-5">
+
+            <!-- 요약 카드 -->
+            <div id="info-cards" class="grid grid-cols-1 sm:grid-cols-3 gap-4"></div>
+
+            <!-- 전체 보고서 -->
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 md:p-10">
+                <div id="report-content" class="report-content max-w-none"></div>
+            </div>
+
+            <!-- 원시 데이터 토글 -->
+            <details class="bg-gray-50 rounded-xl border border-gray-200">
+                <summary class="px-5 py-3 cursor-pointer text-sm font-medium text-gray-600 hover:text-gray-800">
+                    📊 원시 분석 데이터 보기 (개발자용)
+                </summary>
+                <pre id="raw-data" class="px-5 py-4 text-xs text-gray-600 overflow-auto max-h-80"></pre>
+            </details>
+
+            <div class="flex justify-center gap-3">
+                <button
+                    onclick="resetForm()"
+                    class="px-6 py-2 bg-gray-700 text-white text-sm rounded-xl hover:bg-gray-800"
+                >
+                    ← 새 분석 시작
+                </button>
+                <button
+                    onclick="printReport()"
+                    class="px-6 py-2 bg-blue-600 text-white text-sm rounded-xl hover:bg-blue-700"
+                >
+                    🖨️ 인쇄 / PDF 저장
+                </button>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+    // ── 상수 ────────────────────────────────────────────────────────────────
+    const STEPS = [
+        { step: 1, label: "사이트 접속" },
+        { step: 2, label: "호스팅 솔루션 분석" },
+        { step: 3, label: "기업 정보 · 카테고리 추출" },
+        { step: 4, label: "카카오톡 채널 분석" },
+        { step: 5, label: "AI 보고서 생성 (Claude Opus)" },
+    ];
+
+    // ── 진행 스텝 초기화 ─────────────────────────────────────────────────────
+    function initSteps() {
+        const container = document.getElementById('progress-steps');
+        container.innerHTML = STEPS.map(s => `
+            <div id="step-${s.step}" class="flex items-center gap-3 text-gray-400 transition-all duration-300">
+                <div id="step-icon-${s.step}"
+                     class="w-7 h-7 rounded-full border-2 border-gray-300 flex items-center
+                            justify-center text-xs font-bold shrink-0">
+                    ${s.step}
+                </div>
+                <span id="step-label-${s.step}" class="text-sm">${s.label}</span>
+            </div>
+        `).join('');
+    }
+
+    function updateStep(step) {
+        // 이전 스텝 완료 처리
+        for (let i = 1; i < step; i++) {
+            const row = document.getElementById(`step-${i}`);
+            const icon = document.getElementById(`step-icon-${i}`);
+            if (row && icon) {
+                row.className = 'flex items-center gap-3 text-green-600 transition-all duration-300';
+                icon.className = 'w-7 h-7 rounded-full bg-green-500 flex items-center justify-center text-white text-xs font-bold shrink-0';
+                icon.textContent = '✓';
+            }
+        }
+        // 현재 스텝 활성화
+        const cur = document.getElementById(`step-${step}`);
+        const curIcon = document.getElementById(`step-icon-${step}`);
+        if (cur && curIcon) {
+            cur.className = 'flex items-center gap-3 text-blue-600 transition-all duration-300';
+            curIcon.className = 'w-7 h-7 rounded-full border-2 border-blue-500 flex items-center justify-center text-xs font-bold text-blue-500 shrink-0';
+        }
+    }
+
+    function completeAllSteps() {
+        STEPS.forEach(s => {
+            const row = document.getElementById(`step-${s.step}`);
+            const icon = document.getElementById(`step-icon-${s.step}`);
+            if (row && icon) {
+                row.className = 'flex items-center gap-3 text-green-600';
+                icon.className = 'w-7 h-7 rounded-full bg-green-500 flex items-center justify-center text-white text-xs font-bold shrink-0';
+                icon.textContent = '✓';
+            }
+        });
+    }
+
+    // ── 요약 카드 렌더링 ────────────────────────────────────────────────────
+    function renderCards(raw) {
+        const hostingText = Object.keys(raw.hosting || {}).length > 0
+            ? Object.keys(raw.hosting).join(', ')
+            : '감지 불가';
+
+        const kakao = raw.kakao || {};
+        let kakaoText = '미감지';
+        if (kakao.friends) kakaoText = `친구 ${kakao.friends}`;
+        else if (kakao.channel_id) kakaoText = '채널 확인됨';
+        else if (kakao.error) kakaoText = '접속 불가';
+
+        const footer = raw.footer || {};
+        const companyText = footer['회사명'] || footer['대표자'] || '정보 없음';
+
+        document.getElementById('info-cards').innerHTML = `
+            <div class="bg-blue-50 rounded-xl border border-blue-200 p-4">
+                <div class="text-blue-400 text-xs font-semibold uppercase tracking-widest mb-2">
+                    🖥️ 호스팅 솔루션
+                </div>
+                <div class="text-blue-800 font-bold text-base leading-snug">${hostingText}</div>
+            </div>
+            <div class="bg-emerald-50 rounded-xl border border-emerald-200 p-4">
+                <div class="text-emerald-500 text-xs font-semibold uppercase tracking-widest mb-2">
+                    🏢 기업 정보
+                </div>
+                <div class="text-emerald-800 font-bold text-base leading-snug">${companyText}</div>
+            </div>
+            <div class="bg-yellow-50 rounded-xl border border-yellow-200 p-4">
+                <div class="text-yellow-500 text-xs font-semibold uppercase tracking-widest mb-2">
+                    💬 카카오톡 채널
+                </div>
+                <div class="text-yellow-800 font-bold text-base leading-snug">${kakaoText}</div>
+            </div>
+        `;
+    }
+
+    // ── 보고서 표시 ─────────────────────────────────────────────────────────
+    function showReport(data) {
+        completeAllSteps();
+        document.getElementById('progress-section').classList.add('hidden');
+        document.getElementById('report-section').classList.remove('hidden');
+
+        renderCards(data.raw);
+        document.getElementById('report-content').innerHTML = data.report_html;
+        document.getElementById('raw-data').textContent =
+            JSON.stringify(data.raw, null, 2);
+
+        // 보고서로 스크롤
+        document.getElementById('report-section').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function showError(message) {
+        document.getElementById('progress-section').classList.add('hidden');
+        document.getElementById('error-section').classList.remove('hidden');
+        document.getElementById('error-message').textContent = message;
+    }
+
+    function resetForm() {
+        ['progress-section', 'error-section', 'report-section'].forEach(id =>
+            document.getElementById(id).classList.add('hidden')
+        );
+        const btn = document.getElementById('submit-btn');
+        btn.disabled = false;
+        btn.textContent = '분석 시작';
+        document.getElementById('url-input').focus();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function printReport() {
+        window.print();
+    }
+
+    // ── 폼 제출 핸들러 ─────────────────────────────────────────────────────
+    document.getElementById('analyze-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const url = document.getElementById('url-input').value.trim();
+        const btn = document.getElementById('submit-btn');
+        btn.disabled = true;
+        btn.textContent = '분석 중...';
+
+        // UI 초기화
+        ['error-section', 'report-section'].forEach(id =>
+            document.getElementById(id).classList.add('hidden')
+        );
+        document.getElementById('progress-section').classList.remove('hidden');
+        initSteps();
+
+        const formData = new FormData();
+        formData.append('url', url);
+
+        try {
+            const response = await fetch('/analyze', {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!response.ok) {
+                throw new Error(`서버 오류: ${response.status}`);
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+
+                // SSE 파싱
+                const parts = buffer.split('\n\n');
+                buffer = parts.pop() ?? '';
+
+                for (const part of parts) {
+                    const line = part.trim();
+                    if (!line.startsWith('data: ')) continue;
+                    try {
+                        const data = JSON.parse(line.slice(6));
+
+                        if (data.type === 'progress') {
+                            updateStep(data.step);
+                            const label = document.getElementById(`step-label-${data.step}`);
+                            if (label) label.textContent = data.message;
+
+                        } else if (data.type === 'result') {
+                            showReport(data);
+                            btn.disabled = false;
+                            btn.textContent = '분석 시작';
+
+                        } else if (data.type === 'error') {
+                            showError(data.message);
+                            btn.disabled = false;
+                            btn.textContent = '분석 시작';
+                        }
+                    } catch (parseErr) {
+                        console.warn('SSE 파싱 오류:', parseErr, line);
+                    }
+                }
+            }
+
+        } catch (err) {
+            showError('연결 오류: ' + err.message);
+            btn.disabled = false;
+            btn.textContent = '분석 시작';
+        }
+    });
+    </script>
+
+    <!-- 인쇄 스타일 -->
+    <style media="print">
+        header, form, #progress-section, #error-section,
+        details, button, .fade-in > div:last-child { display: none !important; }
+        .report-content { font-size: 11pt; }
+        body { background: white; }
+    </style>
+
+</body>
+</html>

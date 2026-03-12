@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(/usr/local/Caskroom/miniconda/base/bin/pip install google-genai -q)",
+      "Bash(/usr/local/Caskroom/miniconda/base/bin/python3 -c \":*)",
+      "Bash(/usr/local/Caskroom/miniconda/base/bin/python3 -c \"from app.analyzer import generate_report; print\\(''✅ OK''\\)\")"
+    ]
+  }
+}
